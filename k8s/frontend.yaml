@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: student-app
+  labels:
+    app: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: dubey23/student-frontend:1.0.0   # change to your Docker Hub user and tag
+          ports:
+            - containerPort: 80
+          env:
+            - name: BACKEND_HOST
+              value: backend-svc
+            - name: BACKEND_PORT
+              value: "8080"
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+---
+# LoadBalancer: AWS creates a public load balancer. This is the only public entry point.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-svc
+  namespace: student-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80

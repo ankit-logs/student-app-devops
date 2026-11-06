@@ -1,0 +1,81 @@
+# Optional: MariaDB inside the cluster (the "no RDS" option).
+# Needs the EBS CSI driver add-on (included in k8s/eks-cluster.yaml).
+# If you use Amazon RDS instead, skip this file.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  namespace: student-app
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mariadb
+  namespace: student-app
+spec:
+  serviceName: mariadb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+        - name: mariadb
+          image: mariadb:11.4
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: MARIADB_ROOT_PASSWORD } }
+            - name: MARIADB_DATABASE
+              valueFrom: { secretKeyRef: { name: db-credentials, key: MARIADB_DATABASE } }
+            - name: MARIADB_USER
+              valueFrom: { secretKeyRef: { name: db-credentials, key: MARIADB_USER } }
+            - name: MARIADB_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: MARIADB_PASSWORD } }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+              subPath: mysql          # avoids the ext4 "lost+found" folder breaking first start
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { memory: 512Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: ebs-gp3
+        resources:
+          requests:
+            storage: 5Gi

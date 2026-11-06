@@ -1,0 +1,26 @@
+# Create with:  eksctl create cluster -f k8s/eks-cluster.yaml
+# Delete with:  eksctl delete cluster -f k8s/eks-cluster.yaml
+# EKS bills for the control plane, the worker nodes and load balancers. Delete it when you finish.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: student-app
+  region: ap-south-1
+
+iam:
+  withOIDC: true
+
+addons:
+  # Needed only for the in-cluster MariaDB (k8s/mariadb.yaml), which stores data on an EBS volume.
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true
+
+managedNodeGroups:
+  - name: workers
+    instanceType: t3.medium
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 3
+    volumeSize: 20
